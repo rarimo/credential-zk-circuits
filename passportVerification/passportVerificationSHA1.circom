@@ -17,13 +17,14 @@ template PassportVerificationSHA1(N) {
 
     signal input dg1[N];
     signal input selector;
+
     signal output out[5];
 
     component passportVerificationCore = PassportVerificationCore(N);
 
     passportVerificationCore.selector <== selector;
     passportVerificationCore.dg1 <== dg1;
-    
+
     passportVerificationCore.currDateYear   <== currDateYear;
     passportVerificationCore.currDateMonth  <== currDateMonth;
     passportVerificationCore.currDateDay    <== currDateDay;
@@ -50,6 +51,7 @@ template PassportVerificationSHA1(N) {
     }
 
     out[0] <== bits2NumHash.out;
+    out[1] <== 0;
 }
 
 component main {public [currDateDay, 
