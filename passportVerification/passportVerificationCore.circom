@@ -3,6 +3,7 @@ pragma circom  2.1.6;
 include "../node_modules/circomlib/circuits/bitify.circom";
 include "./dateComparison.circom";
 include "../node_modules/circomlib/circuits/comparators.circom";
+include "../node_modules/circomlib/circuits/poseidon.circom";
 
 template PassportVerificationCore(N) {
     signal input currDateYear;
@@ -15,8 +16,9 @@ template PassportVerificationCore(N) {
 
     signal input ageLowerbound;
 
-    signal input in[N];
-    signal output out;
+    signal input dg1[N];
+    signal input selector;
+    signal output out[3];
 
     // DATE OF EXPIRACY DECODING
     component bits2NumExpYearDigit1  = Bits2Num(4);
@@ -29,12 +31,12 @@ template PassportVerificationCore(N) {
     var POSITION = 564;
     var SHIFT = 8;
     for (var i = 0; i < 4; i++) {
-        bits2NumExpYearDigit1.in[3 - i]  <== in[POSITION + 0 * SHIFT + i];
-        bits2NumExpYearDigit2.in[3 - i]  <== in[POSITION + 1 * SHIFT + i];
-        bits2NumExpMonthDigit1.in[3 - i] <== in[POSITION + 2 * SHIFT + i];
-        bits2NumExpMonthDigit2.in[3 - i] <== in[POSITION + 3 * SHIFT + i];
-        bits2NumExpDayDigit1.in[3 - i]   <== in[POSITION + 4 * SHIFT + i];
-        bits2NumExpDayDigit2.in[3 - i]   <== in[POSITION + 5 * SHIFT + i];
+        bits2NumExpYearDigit1.in[3 - i]  <== dg1[POSITION + 0 * SHIFT + i];
+        bits2NumExpYearDigit2.in[3 - i]  <== dg1[POSITION + 1 * SHIFT + i];
+        bits2NumExpMonthDigit1.in[3 - i] <== dg1[POSITION + 2 * SHIFT + i];
+        bits2NumExpMonthDigit2.in[3 - i] <== dg1[POSITION + 3 * SHIFT + i];
+        bits2NumExpDayDigit1.in[3 - i]   <== dg1[POSITION + 4 * SHIFT + i];
+        bits2NumExpDayDigit2.in[3 - i]   <== dg1[POSITION + 5 * SHIFT + i];
     }
 
     signal TEN <== 10;
@@ -53,18 +55,41 @@ template PassportVerificationCore(N) {
     
     POSITION = 496+4;
     for (var i = 0; i < 4; i++) {
-        bits2NumBirthYearDigit1.in[3 - i]  <== in[POSITION + 0 * SHIFT + i];
-        bits2NumBirthYearDigit2.in[3 - i]  <== in[POSITION + 1 * SHIFT + i];
-        bits2NumBirthMonthDigit1.in[3 - i] <== in[POSITION + 2 * SHIFT + i];
-        bits2NumBirthMonthDigit2.in[3 - i] <== in[POSITION + 3 * SHIFT + i];
-        bits2NumBirthDayDigit1.in[3 - i]   <== in[POSITION + 4 * SHIFT + i];
-        bits2NumBirthDayDigit2.in[3 - i]   <== in[POSITION + 5 * SHIFT + i];
+        bits2NumBirthYearDigit1.in[3 - i]  <== dg1[POSITION + 0 * SHIFT + i];
+        bits2NumBirthYearDigit2.in[3 - i]  <== dg1[POSITION + 1 * SHIFT + i];
+        bits2NumBirthMonthDigit1.in[3 - i] <== dg1[POSITION + 2 * SHIFT + i];
+        bits2NumBirthMonthDigit2.in[3 - i] <== dg1[POSITION + 3 * SHIFT + i];
+        bits2NumBirthDayDigit1.in[3 - i]   <== dg1[POSITION + 4 * SHIFT + i];
+        bits2NumBirthDayDigit2.in[3 - i]   <== dg1[POSITION + 5 * SHIFT + i];
     }
 
     signal birthYear  <== bits2NumBirthYearDigit1.out  * TEN + bits2NumBirthYearDigit2.out;
     signal birthMonth <== bits2NumBirthMonthDigit1.out * TEN + bits2NumBirthMonthDigit2.out;
     signal birthDay   <== bits2NumBirthDayDigit1.out   * TEN + bits2NumBirthDayDigit2.out;
 
+    // ----------
+    // NAME DECODING
+    // Name is encoded with 30 bytes in DG1 according to the ICAO docs
+    var NAME_FIELD_SIZE = 30*8;
+    component bits2NumName = Bits2Num(NAME_FIELD_SIZE);
+
+    POSITION = 11;
+    for (var i = 0; i < NAME_FIELD_SIZE; i++) {
+        bits2NumName.in[i] <== dg1[POSITION + i];
+    }
+    // log(bits2NumName.out);
+
+    // ----------
+    // SEX DECODING
+    var SEX_FIELD_SIZE = 8;
+    component bits2NumSex = Bits2Num(SEX_FIELD_SIZE);
+
+    var SEX_POSITION = 69;
+    for (var i = 0; i < SEX_FIELD_SIZE; i++) {
+        bits2NumSex.in[i] <== dg1[SEX_POSITION*8 + i];
+    }
+    // log(bits2NumSex.out);
+    
     // ----------
     // CURRENT DATE < EXPIRACY DATE
 
@@ -131,8 +156,21 @@ template PassportVerificationCore(N) {
     component passportIssuer = Bits2Num(24);
 
     for (var i = 0; i < 24; i++) {
-        passportIssuer.in[i] <== in[56 + i];
+        passportIssuer.in[i] <== dg1[56 + i];
     }
 
-    out <== passportIssuer.out;
+    component num2BitsSelector = Num2Bits(3);
+    num2BitsSelector.in <== selector;
+
+    // ---------
+    // HASHING NAME
+
+    component nameHasher = Poseidon(1);
+    nameHasher.inputs[0] <== bits2NumName.out;
+
+    // OUT SIGNALS
+
+    out[0] <== bits2NumName.out * num2BitsSelector.out[0];
+    out[1] <== nameHasher.out * num2BitsSelector.out[1];
+    out[2] <== passportIssuer.out * num2BitsSelector.out[2];
 }

@@ -15,12 +15,15 @@ template PassportVerificationSHA256(N) {
 
     signal input ageLowerbound;
 
-    signal input in[N];
-    signal output out[3];
+    signal input dg1[N];
+    signal input selector;
+
+    signal output out[5];
 
     component passportVerificationCore = PassportVerificationCore(N);
 
-    passportVerificationCore.in <== in;
+    passportVerificationCore.selector <== selector;
+    passportVerificationCore.dg1 <== dg1;
 
     passportVerificationCore.currDateYear   <== currDateYear;
     passportVerificationCore.currDateMonth  <== currDateMonth;
@@ -32,12 +35,14 @@ template PassportVerificationSHA256(N) {
 
     passportVerificationCore.ageLowerbound  <== ageLowerbound;
 
-    out[2] <== passportVerificationCore.out;
+    out[2] <== passportVerificationCore.out[0];
+    out[3] <== passportVerificationCore.out[1];
+    out[4] <== passportVerificationCore.out[2];
     // -------
 
     component hasher = Sha256(N);
 
-    hasher.in <== in;
+    hasher.in <== dg1;
 
     component bits2NumFirst = Bits2Num(128);
     component bits2NumSecond = Bits2Num(128);

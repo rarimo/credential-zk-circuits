@@ -1,5 +1,6 @@
 {
     "in" : [0,1,1,0,0,0,"..."],
+    "selector" : 1,
     "currDateYear"   : 24,
     "currDateMonth"  : 1,
     "currDateDay"    : 25,
